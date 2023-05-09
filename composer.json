@@ -17,13 +17,13 @@
 	},
 	"autoload" : {
 		"psr-4" : {
-			"Laragrad\\SecretKeyAuth\\" : "src"
+			"Laragrad\\SqlTracer\\" : "src"
 		}
 	},
 	"extra" : {
 		"laravel" : {
 			"providers" : [
-				"Laragrad\\SecretKeyAuth\\SecretKeyAuthProvider"
+				"Laragrad\\SqlTracer\\SqlTracerProvider"
 			]
 		}
 	},
