@@ -2,7 +2,9 @@
 
 namespace Laragrad\SqlTracer;
 
-class SqlTracerProvider
+use Illuminate\Support\ServiceProvider;
+
+class SqlTracerProvider extends ServiceProvider
 {
     /**
      * Register any application services.
@@ -28,7 +30,7 @@ class SqlTracerProvider
         // Merge vendor default config with published customized config
         $this->mergeConfigFrom(__DIR__.'/../config/sql-tracer.php', 'laragrad.sql-tracer');
 
-        if (config('sql-tracer.sql_tracer_enabled') === true) {
+        if (config('laragrad.sql-tracer.enable') === true) {
             \DB::listen(\Closure::fromCallable([SqlTracer::class, 'traceQuery']));
         }
     }
