@@ -14,15 +14,12 @@ class SqlTracerProvider extends ServiceProvider
     public function register()
     {
         config([
-            'auth.guards.sanctum' => array_merge([
-                'driver' => 'sanctum',
-                'provider' => null,
-            ], config('auth.guards.sanctum', [])),
+            'filesystems.disks' => array_merge(['sql-tracer' => [
+                'driver' => 'local',
+                'root' => storage_path('sql-tracer'),
+                'throw' => false,
+            ]], config('filesystems.disks', [])),
         ]);
-        
-        if (! app()->configurationIsCached()) {
-            $this->mergeConfigFrom(__DIR__.'/../config/sanctum.php', 'sanctum');
-        }
     }
 
     /**
