@@ -13,6 +13,10 @@ class SqlTracerProvider extends ServiceProvider
      */
     public function register()
     {
+        $this->app->singleton(SqlTracer::class, function ($app) {
+            return new SqlTracer();
+        });
+
         config([
             'filesystems.disks' => array_merge(['sql-tracer' => [
                 'driver' => 'local',
@@ -37,7 +41,8 @@ class SqlTracerProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/sql-tracer.php', 'laragrad.sql-tracer');
 
         if (config('laragrad.sql-tracer.enable') === true) {
-            \DB::listen(\Closure::fromCallable([SqlTracer::class, 'traceQuery']));
+            $sqlTracer = $this->app->make(SqlTracer::class);
+            \DB::listen(\Closure::fromCallable([$sqlTracer, 'traceQuery']));
         }
     }
 }

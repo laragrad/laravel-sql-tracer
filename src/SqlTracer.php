@@ -2,53 +2,86 @@
 
 namespace Laragrad\SqlTracer;
 
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+
 class SqlTracer
 {
-    protected static $column_sep = "\t";
+    /**
+     * @var string
+     */
+    protected $columnSeparator = "\t";
+
+    /**
+     * @var string
+     */
+    protected string $fileName;
+
+    /**
+     *
+     */
+    public function __construct()
+    {
+        $this->fileName = $this->makeFileName();
+    }
+
+    /**
+     * @return string
+     */
+    protected function makeFileName()
+    {
+        $dt = Carbon::now()->format('Ymd');
+        return "sql-tracing-{$dt}.log";
+    }
 
     /**
      * @param $query
      * @return void
      */
-    public static function traceQuery($query) {
+    public function traceQuery($query) {
 
-        $logName = '/logs/query' . \Carbon\Carbon::now()->format('_Ymd') . '.log';
-
-        $request = \App::make(\Illuminate\Http\Request::class);
-        if (!$request->input('x-debug-request-id')) {
-            $request->merge(['x-debug-request-id' => mt_rand(0, 999999)]);
+        $request = \App::make(Request::class);
+        if (!$request->input('x-request-debug-id')) {
+            $request->merge(['x-request-debug-id' => mt_rand(0, 999999)]);
         }
 
-        $sql = str_replace(["\n", "\r", "\t"], [" "], $query->sql);
+        $querySql = str_replace(["\n", "\r", "\t"], [" "], $query->sql);
+        $queryDuration = str_replace('.', ',', sprintf("%' 6.2f", $query->time));
+        $queryBindings = $this->getBindings($query);
+        $backtrace = str_replace(["\n", "\r", "\t"], [" "], $this->prepareBacktrace(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40)));
 
-        $tm = str_replace('.', ',', sprintf("%' 6.2f", $query->time));
+        $data = [];
+        $data[] = now()->format('Y-m-d H:i:s.u');
+        $data[] = $queryDuration;                                       // Query duration (ms)
+        $data[] = $this->eloquentSqlWithBindings($querySql, $queryBindings); // SQL-query
+        $data[] = $request->input('x-debug-request-id');                // Random request identifier
+        $data[] = $request->url();                                      // URL
 
-        foreach ($query->bindings as &$item) {
-            if (is_object($item) && get_class($item) == 'DateTime') {
+        if (config('laragrad.sql-tracer.mode') == 'full') {
+            $data[] = $querySql;                                        // Original SQL query
+            $data[] = implode(', ', $queryBindings);                         // Параметры SQL-запроса
+            $data[] = $request->fullUrl();                              // Full URL
+            $data[] = json_encode($request->all());                     // Requet parameters
+            $data[] = json_encode($backtrace);                          // Backtrace
+        }
+
+        \Storage::disk(config('laragrad.sql-tracer.disk'))->append($this->fileName, implode($this->columnSeparator, $data));
+    }
+
+    /**
+     * @param $query
+     * @return void
+     */
+    protected function getBindings($query)
+    {
+        $bindings = $query->bindings;
+        foreach ($bindings as &$item) {
+            if (is_object($item) && ($item instanceof \DateTime)) {
                 $item = $item->format('Y-m-d H:i:s.u');
             }
         }
 
-        $backtrace = str_replace(["\n", "\r", "\t"], [" "], self::prepareBacktrace(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40)));
-
-        $msg = '';
-        $msg .= now()->format('Y-m-d H:i:s.u');
-        $msg .= self::$column_sep . $request->input('x-debug-request-id');     // Случайный идентификатор API-реквеста
-        $msg .= self::$column_sep . $tm;                                       // Длительность запроса в ms
-        $msg .= self::$column_sep . self::eloquentSqlWithBindings($query->sql, $query->bindings);
-        $msg .= self::$column_sep . $request->url();                           // URL API-реквеста
-        if (config('app.sql_trace_mode') == 'full') {
-            $msg .= self::$column_sep . $sql;                                  // SQL запрос
-            $msg .= self::$column_sep . implode(', ', $query->bindings);       // Параметры SQL-запроса
-            $msg .= self::$column_sep . $request->fullUrl();                   // Полный URL API-реквеста
-            $msg .= self::$column_sep . json_encode($request->all());          // Параметры API-реквеста в виде JSON-объекта
-            $msg .= self::$column_sep . json_encode($backtrace);               // Параметры API-реквеста в виде JSON-объекта
-        }
-
-        \File::append(
-            storage_path($logName),
-            $msg . PHP_EOL
-        );
+        return $bindings;
     }
 
     /**
@@ -56,7 +89,7 @@ class SqlTracer
      * @param array $binds
      * @return string
      */
-    public static function eloquentSqlWithBindings(string $sql, array $binds)
+    public function eloquentSqlWithBindings(string $sql, array $binds)
     {
         $sql = str_replace('?', '%s', $sql);
 
@@ -79,15 +112,21 @@ class SqlTracer
      * @param array $backtrace
      * @return array
      */
-    public static function prepareBacktrace(array $backtrace)
+    public function prepareBacktrace(array $backtrace)
     {
-        return array_filter(array_map(function ($item) {
-            $filePath = $item['file'] ?? null;
-            if (stripos($filePath, 'vendor') || !$filePath) {
-                return null;
-            }
-            $line = $item['line'] ?? null;
-            return $filePath . ": " . $line;
-        }, $backtrace));
+        return str_replace(["\n", "\r", "\t"], [" "],
+            array_filter(
+                array_map(function ($item) {
+
+                    $file = $item['file'] ?? '';
+                    if (stripos($file, 'vendor') || !$file) {
+                        return null;
+                    }
+                    $line = $item['line'] ?? '';
+
+                    return $file . ": " . $line;
+                }, $backtrace)
+            )
+        );
     }
 }
