@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 
 class SqlTracer
 {
+    const MODE_SHORT = 'short';
+    const MODE_FULL = 'full';
+
     /**
      * @var string
      */
@@ -18,10 +21,29 @@ class SqlTracer
     protected string $fileName;
 
     /**
+     * @var string
+     */
+    protected string $mode;
+
+    /**
+     * @var string
+     */
+    protected string $disk;
+
+    /**
+     * @var string
+     */
+    protected string $path;
+
+    /**
      *
      */
     public function __construct()
     {
+        $this->columnSeparator = config('laragrad.sql-tracer.column_separator', "\t");
+        $this->mode = config('laragrad.sql-tracer.mode', 'full');
+        $this->disk = config('laragrad.sql-tracer.disk', 'sql-tracer');
+        $this->path = config('laragrad.sql-tracer.path', '/');
         $this->fileName = $this->makeFileName();
     }
 
@@ -31,7 +53,7 @@ class SqlTracer
     protected function makeFileName()
     {
         $dt = now()->format('Ymd');
-        return "{$dt}.log";
+        return $this->path . '/' . "{$dt}.log";
     }
 
     /**
@@ -52,21 +74,49 @@ class SqlTracer
 
         $data = [];
         $data[] = now()->format('Y-m-d H:i:s.u');
+        $data[] = $request->input('x-request-debug-id');                // Random request identifier
         $data[] = $queryDuration;                                       // Query duration (ms)
-        $data[] = $this->mapSqlBindings($querySql, $queryBindings); // SQL-query
-        $data[] = $request->input('x-debug-request-id');                // Random request identifier
+        $data[] = $this->mapSqlBindings($querySql, $queryBindings);     // SQL-query
         $data[] = $request->url();                                      // URL
 
-        if (config('laragrad.sql-tracer.mode') == 'full') {
+        if ($this->mode == self::MODE_FULL) {
             $data[] = $querySql;                                        // Original SQL query
-            $data[] = implode(', ', $queryBindings);                         // Параметры SQL-запроса
+            $data[] = implode(', ', $queryBindings);                    // SQL query parameters
             $data[] = $request->fullUrl();                              // Full URL
             $data[] = json_encode($request->all());                     // Requet parameters
             $data[] = json_encode($backtrace);                          // Backtrace
         }
 
-        \Storage::disk(config('laragrad.sql-tracer.disk'))
-            ->append(config('laragrad.sql-tracer.path') . '/' . $this->fileName, implode($this->columnSeparator, $data));
+        if (! \Storage::disk($this->disk)->exists($this->fileName)) {
+            $this->makeHeader();
+        }
+
+        \Storage::disk($this->disk)
+            ->append($this->fileName, implode($this->columnSeparator, $data));
+    }
+
+    protected function makeHeader()
+    {
+        $headerData = [
+            'Date/Time',
+            'ms',
+            'Request ID',
+            'SQL',
+            'URL',
+        ];
+
+        if ($this->mode == self::MODE_FULL) {
+            $headerData = array_merge($headerData, [
+                'Original SQL',
+                'SQL parameters',
+                'Full URL',
+                'Request parameters',
+                'Backtrace',
+            ]);
+        }
+
+        \Storage::disk($this->disk)
+            ->append($this->fileName, implode($this->columnSeparator, $headerData));
     }
 
     /**
