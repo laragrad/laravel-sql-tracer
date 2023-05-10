@@ -30,8 +30,8 @@ class SqlTracer
      */
     protected function makeFileName()
     {
-        $dt = Carbon::now()->format('Ymd');
-        return "sql-tracing-{$dt}.log";
+        $dt = now()->format('Ymd');
+        return "{$dt}.log";
     }
 
     /**
@@ -48,12 +48,12 @@ class SqlTracer
         $querySql = str_replace(["\n", "\r", "\t"], [" "], $query->sql);
         $queryDuration = str_replace('.', ',', sprintf("%' 6.2f", $query->time));
         $queryBindings = $this->getBindings($query);
-        $backtrace = str_replace(["\n", "\r", "\t"], [" "], $this->prepareBacktrace(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40)));
+        $backtrace = str_replace(["\n", "\r", "\t"], [" "], $this->pruneBacktrace(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40)));
 
         $data = [];
         $data[] = now()->format('Y-m-d H:i:s.u');
         $data[] = $queryDuration;                                       // Query duration (ms)
-        $data[] = $this->eloquentSqlWithBindings($querySql, $queryBindings); // SQL-query
+        $data[] = $this->mapSqlBindings($querySql, $queryBindings); // SQL-query
         $data[] = $request->input('x-debug-request-id');                // Random request identifier
         $data[] = $request->url();                                      // URL
 
@@ -65,7 +65,8 @@ class SqlTracer
             $data[] = json_encode($backtrace);                          // Backtrace
         }
 
-        \Storage::disk(config('laragrad.sql-tracer.disk'))->append($this->fileName, implode($this->columnSeparator, $data));
+        \Storage::disk(config('laragrad.sql-tracer.disk'))
+            ->append(config('laragrad.sql-tracer.path') . '/' . $this->fileName, implode($this->columnSeparator, $data));
     }
 
     /**
@@ -89,7 +90,7 @@ class SqlTracer
      * @param array $binds
      * @return string
      */
-    public function eloquentSqlWithBindings(string $sql, array $binds)
+    public function mapSqlBindings(string $sql, array $binds)
     {
         $sql = str_replace('?', '%s', $sql);
 
@@ -112,7 +113,7 @@ class SqlTracer
      * @param array $backtrace
      * @return array
      */
-    public function prepareBacktrace(array $backtrace)
+    public function pruneBacktrace(array $backtrace)
     {
         return str_replace(["\n", "\r", "\t"], [" "],
             array_filter(
