@@ -76,12 +76,12 @@ class SqlTracer
         $data[] = now()->format('Y-m-d H:i:s.u');
         $data[] = $request->input('x-request-debug-id');                // Random request identifier
         $data[] = $queryDuration;                                       // Query duration (ms)
-        $data[] = $this->mapSqlBindings($querySql, $queryBindings);     // SQL-query
+        $data[] = $this->mapSqlBindings($querySql, $queryBindings);     // SQL query with mapped parameters
         $data[] = $request->url();                                      // URL
 
         if ($this->mode == self::MODE_FULL) {
             $data[] = $querySql;                                        // Original SQL query
-            $data[] = implode(', ', $queryBindings);                    // SQL query parameters
+            $data[] = json_encode(array_values($queryBindings));        // SQL query parameters
             $data[] = $request->fullUrl();                              // Full URL
             $data[] = json_encode($request->all());                     // Requet parameters
             $data[] = json_encode($backtrace);                          // Backtrace
