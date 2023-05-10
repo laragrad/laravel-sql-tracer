@@ -99,8 +99,8 @@ class SqlTracer
     {
         $headerData = [
             'Date/Time',
-            'ms',
             'Request ID',
+            'ms',
             'SQL',
             'URL',
         ];
