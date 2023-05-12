@@ -10,10 +10,8 @@ class SqlTracer
     const MODE_SHORT = 'short';
     const MODE_FULL = 'full';
 
-    /**
-     * @var string
-     */
-    protected $columnSeparator = "\t";
+    const UTF8_BOM = "\xEF\xBB\xBF";
+    const CSV_COL_SEP = ";";
 
     /**
      * @var string
@@ -35,16 +33,30 @@ class SqlTracer
      */
     protected string $path;
 
+    protected $outFile;
+
     /**
      *
      */
     public function __construct()
     {
-        $this->columnSeparator = config('laragrad.sql-tracer.column_separator', "\t");
         $this->mode = config('laragrad.sql-tracer.mode', 'full');
         $this->disk = config('laragrad.sql-tracer.disk', 'sql-tracer');
         $this->path = config('laragrad.sql-tracer.path', '/');
         $this->fileName = $this->makeFileName();
+
+    }
+
+    protected function toCsv(array $lineData)
+    {
+        $f = fopen('php://memory', 'r+');
+        fputcsv($f, $lineData, self::CSV_COL_SEP);
+        rewind($f);
+        $result = str_replace("\n", "", stream_get_contents($f));
+        fclose($f);
+
+        return $result;
+
     }
 
     /**
@@ -53,7 +65,7 @@ class SqlTracer
     protected function makeFileName()
     {
         $dt = now()->format('Ymd');
-        return $this->path . '/' . "{$dt}.log";
+        return $this->path . '/' . "{$dt}.csv";
     }
 
     /**
@@ -92,7 +104,9 @@ class SqlTracer
         }
 
         \Storage::disk($this->disk)
-            ->append($this->fileName, implode($this->columnSeparator, $data));
+            ->append($this->fileName, $this->toCsv($data));
+
+
     }
 
     protected function makeHeader()
@@ -116,7 +130,7 @@ class SqlTracer
         }
 
         \Storage::disk($this->disk)
-            ->append($this->fileName, implode($this->columnSeparator, $headerData));
+            ->append($this->fileName, self::UTF8_BOM . $this->toCsv($headerData));
     }
 
     /**
