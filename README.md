@@ -14,7 +14,7 @@ By default, tracing is disabled. To enable tracing append into `.env` next line
 SQL_TRACER_ENABLE=true
 ```
 
-Tracing file will be created with filename `./storage/sql-tracer/YYYYMMDD.log`
+Tracing output to file `./storage/sql-tracer/YYYYMMDD.csv`
 
 ## Configuring .env
 
